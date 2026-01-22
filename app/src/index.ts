@@ -41,7 +41,7 @@ export default {
 		// CORS headers for API routes
 		const corsHeaders = {
 			'Access-Control-Allow-Origin': '*',
-			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+			'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
 			'Access-Control-Allow-Headers': 'Content-Type',
 		};
 
@@ -253,6 +253,35 @@ Return only the JSON object:`;
 				return new Response(JSON.stringify(result.results), {
 					headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 				});
+			}
+
+			// Route: Delete feedback (DELETE /api/feedback/:id)
+			if (path.startsWith('/api/feedback/') && method === 'DELETE') {
+				const feedbackId = parseInt(path.split('/').pop() || '0');
+				
+				if (!feedbackId || isNaN(feedbackId)) {
+					return new Response(
+						JSON.stringify({ error: 'Invalid feedback ID' }),
+						{ status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+					);
+				}
+
+				try {
+					// Delete the feedback
+					await env.DB.prepare('DELETE FROM feedback WHERE id = ?')
+						.bind(feedbackId)
+						.run();
+
+					return new Response(
+						JSON.stringify({ success: true, message: 'Feedback deleted successfully' }),
+						{ headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+					);
+				} catch (error) {
+					return new Response(
+						JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to delete feedback' }),
+						{ status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+					);
+				}
 			}
 
 			// Route: Get stats (GET /api/stats)
@@ -735,6 +764,18 @@ function getDashboardHTML(): string {
 			background: #1a1a1a;
 			border-color: #3a3a3a;
 		}
+		.btn-delete {
+			background: #3a1a1a;
+			border-color: #5a2a2a;
+			color: #f87171;
+			padding: 6px 12px;
+			font-size: 12px;
+		}
+		.btn-delete:hover {
+			background: #4a2a2a;
+			border-color: #6a3a3a;
+			color: #ff8a8a;
+		}
 	</style>
 </head>
 <body>
@@ -883,7 +924,6 @@ function getDashboardHTML(): string {
 				</div>
 			</div>
 			<div class="filter-actions">
-				<button type="button" id="applyFilters">Apply Filters</button>
 				<button type="button" id="clearFilters" class="btn-secondary">Clear</button>
 			</div>
 		</div>
@@ -895,15 +935,13 @@ function getDashboardHTML(): string {
 	</div>
 
 	<script>
-		// Load stats, tags, and feedback on page load
+		// Load stats and feedback on page load
 		loadStats();
-		loadTags();
 		loadFeedback();
 
 		// Refresh every 10 seconds
 		setInterval(() => {
 			loadStats();
-			loadTags();
 			loadFeedback();
 		}, 10000);
 
@@ -962,29 +1000,8 @@ function getDashboardHTML(): string {
 			}
 		}
 
-		// Filter event listeners - listen to all checkboxes
-		const filterGroups = [
-			{ id: 'filterSentiment', defaultText: 'All Sentiments' },
-			{ id: 'filterSource', defaultText: 'All Sources' },
-			{ id: 'filterUrgency', defaultText: 'All Urgency Levels' },
-			{ id: 'filterTag', defaultText: 'All Tags' }
-		];
-		
-		filterGroups.forEach(filter => {
-			const group = document.getElementById(filter.id);
-			if (group) {
-				group.addEventListener('change', (e) => {
-					if (e.target && e.target.type === 'checkbox') {
-						updateButtonText(filter.id, filter.defaultText);
-						loadFeedback();
-					}
-				});
-			}
-		});
-
-		document.getElementById('applyFilters').addEventListener('click', () => {
-			loadFeedback();
-		});
+		// Initial filter listeners setup
+		attachFilterListeners();
 
 		document.getElementById('clearFilters').addEventListener('click', () => {
 			// Uncheck all checkboxes
@@ -1094,37 +1111,189 @@ function getDashboardHTML(): string {
 			}
 		}
 
-		async function loadTags() {
-			try {
-				const response = await fetch('/api/stats');
-				const stats = await response.json();
-				const tagPanel = document.getElementById('filterTag');
-				const tagGroup = tagPanel.querySelector('.checkbox-group');
+		async function updateFilterOptions(feedback) {
+			// Extract unique values and counts from filtered feedback
+			const sentimentCounts = {};
+			const sourceCounts = {};
+			const urgencyCounts = {};
+			const tagCounts = {};
+			
+			feedback.forEach(item => {
+				// Count sentiments
+				if (item.sentiment) {
+					sentimentCounts[item.sentiment] = (sentimentCounts[item.sentiment] || 0) + 1;
+				}
 				
-				// Clear existing checkboxes
-				tagGroup.innerHTML = '';
+				// Count sources
+				if (item.source) {
+					sourceCounts[item.source] = (sourceCounts[item.source] || 0) + 1;
+				}
 				
-				// Add top tags as checkboxes
-				if (stats.top_tags && stats.top_tags.length > 0) {
-					for (const tagItem of stats.top_tags) {
-						const checkboxId = 'tag-' + tagItem.tag.replace(/\s+/g, '-').toLowerCase();
-						const checkboxItem = document.createElement('div');
-						checkboxItem.className = 'checkbox-item';
-						const input = document.createElement('input');
-						input.type = 'checkbox';
-						input.id = checkboxId;
-						input.value = tagItem.tag;
-						const label = document.createElement('label');
-						label.htmlFor = checkboxId;
-						label.textContent = tagItem.tag + ' (' + tagItem.count + ')';
-						checkboxItem.appendChild(input);
-						checkboxItem.appendChild(label);
-						tagGroup.appendChild(checkboxItem);
+				// Count urgencies
+				if (item.urgency) {
+					urgencyCounts[item.urgency] = (urgencyCounts[item.urgency] || 0) + 1;
+				}
+				
+				// Count tags
+				if (item.tags) {
+					try {
+						const tags = JSON.parse(item.tags);
+						tags.forEach(tag => {
+							tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+						});
+					} catch (e) {
+						// Skip invalid JSON
 					}
 				}
-			} catch (error) {
-				console.error('Error loading tags:', error);
-			}
+			});
+			
+			// Get currently checked values to preserve them
+			const getCheckedValues = (groupId) => {
+				const checkboxes = document.querySelectorAll('#' + groupId + ' input[type="checkbox"]:checked');
+				return Array.from(checkboxes).map(cb => cb.value);
+			};
+			
+			const checkedSentiments = getCheckedValues('filterSentiment');
+			const checkedSources = getCheckedValues('filterSource');
+			const checkedUrgencies = getCheckedValues('filterUrgency');
+			const checkedTags = getCheckedValues('filterTag');
+			
+			// Helper to update button text after options change
+			const updateButtons = () => {
+				updateButtonText('filterSentiment', 'All Sentiments');
+				updateButtonText('filterSource', 'All Sources');
+				updateButtonText('filterUrgency', 'All Urgency Levels');
+				updateButtonText('filterTag', 'All Tags');
+			};
+			
+			// Update sentiment filter
+			const sentimentPanel = document.getElementById('filterSentiment');
+			const sentimentGroup = sentimentPanel.querySelector('.checkbox-group');
+			sentimentGroup.innerHTML = '';
+			const sentimentOptions = ['positive', 'neutral', 'negative'];
+			sentimentOptions.forEach(sentiment => {
+				if (sentimentCounts[sentiment] !== undefined) {
+					const checkboxId = 'sentiment-' + sentiment;
+					const checkboxItem = document.createElement('div');
+					checkboxItem.className = 'checkbox-item';
+					const input = document.createElement('input');
+					input.type = 'checkbox';
+					input.id = checkboxId;
+					input.value = sentiment;
+					input.checked = checkedSentiments.includes(sentiment);
+					const label = document.createElement('label');
+					label.htmlFor = checkboxId;
+					label.textContent = sentiment + ' (' + (sentimentCounts[sentiment] || 0) + ')';
+					checkboxItem.appendChild(input);
+					checkboxItem.appendChild(label);
+					sentimentGroup.appendChild(checkboxItem);
+				}
+			});
+			
+			// Update source filter
+			const sourcePanel = document.getElementById('filterSource');
+			const sourceGroup = sourcePanel.querySelector('.checkbox-group');
+			sourceGroup.innerHTML = '';
+			const sourceOptions = ['github', 'support', 'twitter', 'email'];
+			sourceOptions.forEach(source => {
+				if (sourceCounts[source] !== undefined) {
+					const checkboxId = 'source-' + source;
+					const checkboxItem = document.createElement('div');
+					checkboxItem.className = 'checkbox-item';
+					const input = document.createElement('input');
+					input.type = 'checkbox';
+					input.id = checkboxId;
+					input.value = source;
+					input.checked = checkedSources.includes(source);
+					const label = document.createElement('label');
+					label.htmlFor = checkboxId;
+					label.textContent = source + ' (' + (sourceCounts[source] || 0) + ')';
+					checkboxItem.appendChild(input);
+					checkboxItem.appendChild(label);
+					sourceGroup.appendChild(checkboxItem);
+				}
+			});
+			
+			// Update urgency filter
+			const urgencyPanel = document.getElementById('filterUrgency');
+			const urgencyGroup = urgencyPanel.querySelector('.checkbox-group');
+			urgencyGroup.innerHTML = '';
+			const urgencyLabels = { 1: '1 - Low', 2: '2', 3: '3 - Medium', 4: '4', 5: '5 - High' };
+			[1, 2, 3, 4, 5].forEach(urgency => {
+				if (urgencyCounts[urgency] !== undefined) {
+					const checkboxId = 'urgency-' + urgency;
+					const checkboxItem = document.createElement('div');
+					checkboxItem.className = 'checkbox-item';
+					const input = document.createElement('input');
+					input.type = 'checkbox';
+					input.id = checkboxId;
+					input.value = urgency.toString();
+					input.checked = checkedUrgencies.includes(urgency.toString());
+					const label = document.createElement('label');
+					label.htmlFor = checkboxId;
+					label.textContent = urgencyLabels[urgency] + ' (' + (urgencyCounts[urgency] || 0) + ')';
+					checkboxItem.appendChild(input);
+					checkboxItem.appendChild(label);
+					urgencyGroup.appendChild(checkboxItem);
+				}
+			});
+			
+			// Update tag filter
+			const tagPanel = document.getElementById('filterTag');
+			const tagGroup = tagPanel.querySelector('.checkbox-group');
+			tagGroup.innerHTML = '';
+			const sortedTags = Object.entries(tagCounts)
+				.sort((a, b) => b[1] - a[1])
+				.slice(0, 20); // Limit to top 20 tags
+			sortedTags.forEach(([tag, count]) => {
+				const checkboxId = 'tag-' + tag.replace(/\s+/g, '-').toLowerCase();
+				const checkboxItem = document.createElement('div');
+				checkboxItem.className = 'checkbox-item';
+				const input = document.createElement('input');
+				input.type = 'checkbox';
+				input.id = checkboxId;
+				input.value = tag;
+				input.checked = checkedTags.includes(tag);
+				const label = document.createElement('label');
+				label.htmlFor = checkboxId;
+				label.textContent = tag + ' (' + count + ')';
+				checkboxItem.appendChild(input);
+				checkboxItem.appendChild(label);
+				tagGroup.appendChild(checkboxItem);
+			});
+			
+			// Re-attach event listeners for the new checkboxes
+			attachFilterListeners();
+			
+			// Update button texts
+			updateButtons();
+		}
+		
+		function attachFilterListeners() {
+			// Filter event listeners - listen to all checkboxes
+			const filterGroups = [
+				{ id: 'filterSentiment', defaultText: 'All Sentiments' },
+				{ id: 'filterSource', defaultText: 'All Sources' },
+				{ id: 'filterUrgency', defaultText: 'All Urgency Levels' },
+				{ id: 'filterTag', defaultText: 'All Tags' }
+			];
+			
+			filterGroups.forEach(filter => {
+				const group = document.getElementById(filter.id);
+				if (group) {
+					// Remove existing listeners by cloning
+					const newGroup = group.cloneNode(true);
+					group.parentNode.replaceChild(newGroup, group);
+					
+					// Add new listener
+					newGroup.addEventListener('change', (e) => {
+						if (e.target && e.target.type === 'checkbox') {
+							updateButtonText(filter.id, filter.defaultText);
+							loadFeedback();
+						}
+					});
+				}
+			});
 		}
 
 		async function loadFeedback() {
@@ -1150,6 +1319,9 @@ function getDashboardHTML(): string {
 				const response = await fetch('/api/feedback?' + params.toString());
 				const feedback = await response.json();
 
+				// Update filter options based on current filtered results
+				await updateFilterOptions(feedback);
+
 				const listDiv = document.getElementById('feedbackList');
 				
 				if (feedback.length === 0) {
@@ -1157,7 +1329,7 @@ function getDashboardHTML(): string {
 					return;
 				}
 
-				let html = '<table><thead><tr><th>ID</th><th>Source</th><th>Sentiment</th><th>Urgency</th><th>Tags</th><th>Summary</th><th>Text</th></tr></thead><tbody>';
+				let html = '<table><thead><tr><th>ID</th><th>Source</th><th>Sentiment</th><th>Urgency</th><th>Tags</th><th>Summary</th><th>Text</th><th>Actions</th></tr></thead><tbody>';
 				
 				for (const item of feedback) {
 					const sentimentClass = item.sentiment ? 'sentiment-' + item.sentiment : '';
@@ -1172,19 +1344,51 @@ function getDashboardHTML(): string {
 					const urgency = item.urgency || '-';
 					const text = (item.text || '').substring(0, 100) + (item.text?.length > 100 ? '...' : '');
 
+					const capitalizedSource = item.source ? item.source.charAt(0).toUpperCase() + item.source.slice(1) : '';
+					
 					html += '<tr>';
 					html += '<td>' + item.id + '</td>';
-					html += '<td>' + item.source + '</td>';
+					html += '<td>' + capitalizedSource + '</td>';
 					html += '<td>' + sentimentBadge + '</td>';
 					html += '<td>' + urgency + '</td>';
 					html += '<td>' + tagsHtml + '</td>';
 					html += '<td>' + summary + '</td>';
 					html += '<td>' + text + '</td>';
+					html += '<td><button type="button" class="btn-delete" data-id="' + item.id + '">Delete</button></td>';
 					html += '</tr>';
 				}
 				
 				html += '</tbody></table>';
 				listDiv.innerHTML = html;
+				
+				// Add delete button event listeners
+				document.querySelectorAll('.btn-delete').forEach(btn => {
+					btn.addEventListener('click', async function() {
+						const feedbackId = this.getAttribute('data-id');
+						if (!feedbackId) return;
+						
+						if (!confirm('Are you sure you want to delete this feedback? This action cannot be undone.')) {
+							return;
+						}
+						
+						try {
+							const response = await fetch('/api/feedback/' + feedbackId, {
+								method: 'DELETE'
+							});
+							
+							if (response.ok) {
+								// Reload feedback and stats
+								loadStats();
+								loadFeedback();
+							} else {
+								const error = await response.json();
+								alert('Error deleting feedback: ' + (error.error || 'Unknown error'));
+							}
+						} catch (error) {
+							alert('Error deleting feedback: ' + error.message);
+						}
+					});
+				});
 			} catch (error) {
 				document.getElementById('feedbackList').innerHTML = 
 					'<div class="error">Error loading feedback: ' + error.message + '</div>';
