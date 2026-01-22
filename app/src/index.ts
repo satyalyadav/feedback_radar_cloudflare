@@ -212,6 +212,8 @@ Return only the JSON object:`;
 				const limit = parseInt(url.searchParams.get('limit') || '50');
 				const source = url.searchParams.get('source');
 				const sentiment = url.searchParams.get('sentiment');
+				const urgency = url.searchParams.get('urgency');
+				const tag = url.searchParams.get('tag');
 
 				let query = 'SELECT * FROM feedback WHERE 1=1';
 				const binds: any[] = [];
@@ -224,6 +226,17 @@ Return only the JSON object:`;
 				if (sentiment) {
 					query += ' AND sentiment = ?';
 					binds.push(sentiment);
+				}
+
+				if (urgency) {
+					query += ' AND urgency = ?';
+					binds.push(parseInt(urgency));
+				}
+
+				if (tag) {
+					// Filter by tag - tags are stored as JSON array, so we need to check if tag exists in the array
+					query += ' AND tags LIKE ?';
+					binds.push(`%"${tag}"%`);
 				}
 
 				query += ' ORDER BY created_at DESC LIMIT ?';
@@ -360,24 +373,31 @@ function getDashboardHTML(): string {
 		}
 		body {
 			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			background: #0a0a0a;
 			min-height: 100vh;
 			padding: 20px;
+			color: #e0e0e0;
 		}
 		.container {
 			max-width: 1200px;
 			margin: 0 auto;
 		}
 		.header {
-			background: white;
+			background: #1a1a1a;
 			padding: 30px;
-			border-radius: 10px;
-			box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+			border-radius: 8px;
+			border: 1px solid #2a2a2a;
 			margin-bottom: 20px;
 		}
 		.header h1 {
-			color: #333;
+			color: #ffffff;
 			margin-bottom: 10px;
+			font-weight: 500;
+			font-size: 24px;
+		}
+		.header p {
+			color: #888;
+			font-size: 14px;
 		}
 		.stats-grid {
 			display: grid;
@@ -386,32 +406,36 @@ function getDashboardHTML(): string {
 			margin-bottom: 20px;
 		}
 		.stat-card {
-			background: white;
+			background: #1a1a1a;
 			padding: 20px;
-			border-radius: 10px;
-			box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+			border-radius: 8px;
+			border: 1px solid #2a2a2a;
 		}
 		.stat-card h3 {
-			color: #666;
-			font-size: 14px;
+			color: #888;
+			font-size: 12px;
 			margin-bottom: 10px;
 			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			font-weight: 500;
 		}
 		.stat-card .value {
 			font-size: 32px;
-			font-weight: bold;
-			color: #333;
+			font-weight: 600;
+			color: #ffffff;
 		}
 		.form-section {
-			background: white;
+			background: #1a1a1a;
 			padding: 30px;
-			border-radius: 10px;
-			box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+			border-radius: 8px;
+			border: 1px solid #2a2a2a;
 			margin-bottom: 20px;
 		}
 		.form-section h2 {
 			margin-bottom: 20px;
-			color: #333;
+			color: #ffffff;
+			font-weight: 500;
+			font-size: 18px;
 		}
 		.form-group {
 			margin-bottom: 15px;
@@ -419,49 +443,70 @@ function getDashboardHTML(): string {
 		.form-group label {
 			display: block;
 			margin-bottom: 5px;
-			color: #666;
+			color: #b0b0b0;
 			font-weight: 500;
+			font-size: 14px;
 		}
 		.form-group select,
 		.form-group textarea {
 			width: 100%;
 			padding: 10px;
-			border: 1px solid #ddd;
-			border-radius: 5px;
+			border: 1px solid #2a2a2a;
+			border-radius: 6px;
 			font-size: 14px;
 			font-family: inherit;
+			background: #0f0f0f;
+			color: #e0e0e0;
+		}
+		.form-group select:focus,
+		.form-group textarea:focus {
+			outline: none;
+			border-color: #3a3a3a;
+		}
+		.form-group textarea::placeholder {
+			color: #666;
+		}
+		.form-group select option {
+			background: #0f0f0f;
+			color: #e0e0e0;
 		}
 		.form-group textarea {
 			min-height: 100px;
 			resize: vertical;
 		}
 		button {
-			background: #667eea;
-			color: white;
-			border: none;
-			padding: 12px 24px;
-			border-radius: 5px;
-			font-size: 16px;
+			background: #2a2a2a;
+			color: #ffffff;
+			border: 1px solid #3a3a3a;
+			padding: 10px 20px;
+			border-radius: 6px;
+			font-size: 14px;
 			cursor: pointer;
-			transition: background 0.3s;
+			transition: all 0.2s;
+			font-weight: 500;
 		}
 		button:hover {
-			background: #5568d3;
+			background: #333;
+			border-color: #444;
 		}
 		button:disabled {
-			background: #ccc;
+			background: #1a1a1a;
+			border-color: #2a2a2a;
+			color: #666;
 			cursor: not-allowed;
 		}
 		.feedback-table {
-			background: white;
+			background: #1a1a1a;
 			padding: 30px;
-			border-radius: 10px;
-			box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+			border-radius: 8px;
+			border: 1px solid #2a2a2a;
 			overflow-x: auto;
 		}
 		.feedback-table h2 {
 			margin-bottom: 20px;
-			color: #333;
+			color: #ffffff;
+			font-weight: 500;
+			font-size: 18px;
 		}
 		table {
 			width: 100%;
@@ -470,66 +515,149 @@ function getDashboardHTML(): string {
 		th, td {
 			padding: 12px;
 			text-align: left;
-			border-bottom: 1px solid #eee;
+			border-bottom: 1px solid #2a2a2a;
+			color: #e0e0e0;
 		}
 		th {
-			background: #f8f9fa;
+			background: #0f0f0f;
 			font-weight: 600;
-			color: #666;
+			color: #b0b0b0;
+			font-size: 12px;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+		td {
+			font-size: 14px;
+		}
+		tr:hover td {
+			background: #0f0f0f;
 		}
 		.sentiment-badge {
 			display: inline-block;
-			padding: 4px 8px;
+			padding: 4px 10px;
 			border-radius: 4px;
-			font-size: 12px;
-			font-weight: 600;
+			font-size: 11px;
+			font-weight: 500;
 		}
 		.sentiment-positive {
-			background: #d4edda;
-			color: #155724;
+			background: #1a3a1a;
+			color: #4ade80;
+			border: 1px solid #2a5a2a;
 		}
 		.sentiment-neutral {
-			background: #fff3cd;
-			color: #856404;
+			background: #3a3a1a;
+			color: #fbbf24;
+			border: 1px solid #5a5a2a;
 		}
 		.sentiment-negative {
-			background: #f8d7da;
-			color: #721c24;
+			background: #3a1a1a;
+			color: #f87171;
+			border: 1px solid #5a2a2a;
 		}
 		.tag {
 			display: inline-block;
-			background: #e9ecef;
-			padding: 2px 8px;
-			border-radius: 12px;
+			background: #2a2a2a;
+			padding: 3px 10px;
+			border-radius: 4px;
 			font-size: 11px;
-			margin-right: 4px;
+			margin-right: 6px;
 			margin-bottom: 4px;
+			color: #b0b0b0;
+			border: 1px solid #3a3a3a;
 		}
 		.loading {
 			text-align: center;
 			padding: 20px;
-			color: #666;
+			color: #888;
 		}
 		.error {
-			background: #f8d7da;
-			color: #721c24;
-			padding: 10px;
-			border-radius: 5px;
+			background: #3a1a1a;
+			color: #f87171;
+			padding: 12px;
+			border-radius: 6px;
 			margin-bottom: 20px;
+			border: 1px solid #5a2a2a;
 		}
 		.success {
-			background: #d4edda;
-			color: #155724;
-			padding: 10px;
-			border-radius: 5px;
+			background: #1a3a1a;
+			color: #4ade80;
+			padding: 12px;
+			border-radius: 6px;
 			margin-bottom: 20px;
+			border: 1px solid #2a5a2a;
+		}
+		.filter-section {
+			background: #1a1a1a;
+			padding: 20px;
+			border-radius: 8px;
+			border: 1px solid #2a2a2a;
+			margin-bottom: 20px;
+		}
+		.filter-section h2 {
+			color: #ffffff;
+			font-weight: 500;
+			font-size: 18px;
+			margin-bottom: 15px;
+		}
+		.filters-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+			gap: 15px;
+			margin-bottom: 15px;
+		}
+		.filter-group {
+			display: flex;
+			flex-direction: column;
+		}
+		.filter-group label {
+			display: block;
+			margin-bottom: 5px;
+			color: #b0b0b0;
+			font-weight: 500;
+			font-size: 12px;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+		.filter-group select {
+			width: 100%;
+			padding: 8px 10px;
+			border: 1px solid #2a2a2a;
+			border-radius: 6px;
+			font-size: 14px;
+			font-family: inherit;
+			background: #0f0f0f;
+			color: #e0e0e0;
+		}
+		.filter-group select:focus {
+			outline: none;
+			border-color: #3a3a3a;
+		}
+		.filter-group select option {
+			background: #0f0f0f;
+			color: #e0e0e0;
+		}
+		.filter-actions {
+			display: flex;
+			gap: 10px;
+		}
+		.filter-actions button {
+			padding: 8px 16px;
+			font-size: 13px;
+		}
+		.btn-secondary {
+			background: #0f0f0f;
+			border-color: #2a2a2a;
+		}
+		.btn-secondary:hover {
+			background: #1a1a1a;
+			border-color: #3a3a3a;
 		}
 	</style>
 </head>
 <body>
 	<div class="container">
 		<div class="header">
-			<h1>📊 Feedback Radar</h1>
+			<h1>Feedback Radar</h1>
 			<p>Analyze and track customer feedback with AI-powered insights</p>
 		</div>
 
@@ -578,6 +706,52 @@ function getDashboardHTML(): string {
 			</form>
 		</div>
 
+		<div class="filter-section">
+			<h2>Filters</h2>
+			<div class="filters-grid">
+				<div class="filter-group">
+					<label for="filterSentiment">Sentiment</label>
+					<select id="filterSentiment">
+						<option value="">All Sentiments</option>
+						<option value="positive">Positive</option>
+						<option value="neutral">Neutral</option>
+						<option value="negative">Negative</option>
+					</select>
+				</div>
+				<div class="filter-group">
+					<label for="filterSource">Source</label>
+					<select id="filterSource">
+						<option value="">All Sources</option>
+						<option value="github">GitHub</option>
+						<option value="support">Support</option>
+						<option value="twitter">Twitter</option>
+						<option value="email">Email</option>
+					</select>
+				</div>
+				<div class="filter-group">
+					<label for="filterUrgency">Urgency</label>
+					<select id="filterUrgency">
+						<option value="">All Urgency Levels</option>
+						<option value="1">1 - Low</option>
+						<option value="2">2</option>
+						<option value="3">3 - Medium</option>
+						<option value="4">4</option>
+						<option value="5">5 - High</option>
+					</select>
+				</div>
+				<div class="filter-group">
+					<label for="filterTag">Tag</label>
+					<select id="filterTag">
+						<option value="">All Tags</option>
+					</select>
+				</div>
+			</div>
+			<div class="filter-actions">
+				<button type="button" id="applyFilters">Apply Filters</button>
+				<button type="button" id="clearFilters" class="btn-secondary">Clear</button>
+			</div>
+		</div>
+
 		<div class="feedback-table">
 			<h2>Latest Feedback</h2>
 			<div id="feedbackList" class="loading">Loading...</div>
@@ -585,15 +759,37 @@ function getDashboardHTML(): string {
 	</div>
 
 	<script>
-		// Load stats and feedback on page load
+		// Load stats, tags, and feedback on page load
 		loadStats();
+		loadTags();
 		loadFeedback();
 
 		// Refresh every 10 seconds
 		setInterval(() => {
 			loadStats();
+			loadTags();
 			loadFeedback();
 		}, 10000);
+
+		// Filter event listeners
+		const filterSelects = ['filterSentiment', 'filterSource', 'filterUrgency', 'filterTag'];
+		filterSelects.forEach(id => {
+			document.getElementById(id).addEventListener('change', () => {
+				loadFeedback();
+			});
+		});
+
+		document.getElementById('applyFilters').addEventListener('click', () => {
+			loadFeedback();
+		});
+
+		document.getElementById('clearFilters').addEventListener('click', () => {
+			document.getElementById('filterSentiment').value = '';
+			document.getElementById('filterSource').value = '';
+			document.getElementById('filterUrgency').value = '';
+			document.getElementById('filterTag').value = '';
+			loadFeedback();
+		});
 
 		// Handle form submission
 		document.getElementById('feedbackForm').addEventListener('submit', async (e) => {
@@ -618,14 +814,49 @@ function getDashboardHTML(): string {
 				});
 
 				if (response.ok) {
+					const result = await response.json();
 					messageDiv.innerHTML = '<div class="success">Feedback submitted successfully! Analyzing...</div>';
 					document.getElementById('feedbackForm').reset();
 					
-					// Wait a bit for AI analysis, then refresh
-					setTimeout(() => {
-						loadStats();
-						loadFeedback();
-					}, 2000);
+					// Poll for analysis completion
+					const feedbackId = result.id;
+					let pollCount = 0;
+					const maxPolls = 20; // Max 20 polls (10 seconds)
+					
+					const pollInterval = setInterval(async () => {
+						pollCount++;
+						
+						try {
+							const checkResponse = await fetch('/api/feedback?limit=100');
+							const feedbackList = await checkResponse.json();
+							const submittedFeedback = feedbackList.find(f => f.id === feedbackId);
+							
+							if (submittedFeedback && submittedFeedback.analysis_status === 'done') {
+								clearInterval(pollInterval);
+								messageDiv.innerHTML = '';
+								loadStats();
+								loadFeedback();
+							} else if (submittedFeedback && submittedFeedback.analysis_status === 'failed') {
+								clearInterval(pollInterval);
+								messageDiv.innerHTML = '<div class="error">Analysis failed: ' + (submittedFeedback.analysis_error || 'Unknown error') + '</div>';
+								loadStats();
+								loadFeedback();
+							} else if (pollCount >= maxPolls) {
+								clearInterval(pollInterval);
+								messageDiv.innerHTML = '';
+								loadStats();
+								loadFeedback();
+							}
+						} catch (error) {
+							// If polling fails, just refresh and clear message
+							if (pollCount >= maxPolls) {
+								clearInterval(pollInterval);
+								messageDiv.innerHTML = '';
+								loadStats();
+								loadFeedback();
+							}
+						}
+					}, 500); // Poll every 500ms
 				} else {
 					const error = await response.json();
 					messageDiv.innerHTML = '<div class="error">Error: ' + (error.error || 'Failed to submit') + '</div>';
@@ -654,9 +885,45 @@ function getDashboardHTML(): string {
 			}
 		}
 
+		async function loadTags() {
+			try {
+				const response = await fetch('/api/stats');
+				const stats = await response.json();
+				const tagSelect = document.getElementById('filterTag');
+				
+				// Clear existing options except "All Tags"
+				tagSelect.innerHTML = '<option value="">All Tags</option>';
+				
+				// Add top tags
+				if (stats.top_tags && stats.top_tags.length > 0) {
+					for (const tagItem of stats.top_tags) {
+						const option = document.createElement('option');
+						option.value = tagItem.tag;
+						option.textContent = tagItem.tag + ' (' + tagItem.count + ')';
+						tagSelect.appendChild(option);
+					}
+				}
+			} catch (error) {
+				console.error('Error loading tags:', error);
+			}
+		}
+
 		async function loadFeedback() {
 			try {
-				const response = await fetch('/api/feedback?limit=50');
+				// Get filter values
+				const sentiment = document.getElementById('filterSentiment').value;
+				const source = document.getElementById('filterSource').value;
+				const urgency = document.getElementById('filterUrgency').value;
+				const tag = document.getElementById('filterTag').value;
+				
+				// Build query string
+				const params = new URLSearchParams({ limit: '50' });
+				if (sentiment) params.append('sentiment', sentiment);
+				if (source) params.append('source', source);
+				if (urgency) params.append('urgency', urgency);
+				if (tag) params.append('tag', tag);
+				
+				const response = await fetch('/api/feedback?' + params.toString());
 				const feedback = await response.json();
 
 				const listDiv = document.getElementById('feedbackList');
