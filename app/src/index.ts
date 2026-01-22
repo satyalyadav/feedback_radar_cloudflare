@@ -210,33 +210,37 @@ Return only the JSON object:`;
 			// Route: Get feedback list (GET /api/feedback)
 			if (path === '/api/feedback' && method === 'GET') {
 				const limit = parseInt(url.searchParams.get('limit') || '50');
-				const source = url.searchParams.get('source');
-				const sentiment = url.searchParams.get('sentiment');
-				const urgency = url.searchParams.get('urgency');
-				const tag = url.searchParams.get('tag');
+				const sources = url.searchParams.getAll('source');
+				const sentiments = url.searchParams.getAll('sentiment');
+				const urgencies = url.searchParams.getAll('urgency');
+				const tags = url.searchParams.getAll('tag');
 
 				let query = 'SELECT * FROM feedback WHERE 1=1';
 				const binds: any[] = [];
 
-				if (source) {
-					query += ' AND source = ?';
-					binds.push(source);
+				if (sources.length > 0) {
+					const placeholders = sources.map(() => '?').join(',');
+					query += ` AND source IN (${placeholders})`;
+					binds.push(...sources);
 				}
 
-				if (sentiment) {
-					query += ' AND sentiment = ?';
-					binds.push(sentiment);
+				if (sentiments.length > 0) {
+					const placeholders = sentiments.map(() => '?').join(',');
+					query += ` AND sentiment IN (${placeholders})`;
+					binds.push(...sentiments);
 				}
 
-				if (urgency) {
-					query += ' AND urgency = ?';
-					binds.push(parseInt(urgency));
+				if (urgencies.length > 0) {
+					const placeholders = urgencies.map(() => '?').join(',');
+					query += ` AND urgency IN (${placeholders})`;
+					binds.push(...urgencies.map(u => parseInt(u)));
 				}
 
-				if (tag) {
-					// Filter by tag - tags are stored as JSON array, so we need to check if tag exists in the array
-					query += ' AND tags LIKE ?';
-					binds.push(`%"${tag}"%`);
+				if (tags.length > 0) {
+					// Filter by tags - tags are stored as JSON array, so we need to check if any tag exists in the array
+					const tagConditions = tags.map(() => 'tags LIKE ?');
+					query += ' AND (' + tagConditions.join(' OR ') + ')';
+					binds.push(...tags.map(tag => `%"${tag}"%`));
 				}
 
 				query += ' ORDER BY created_at DESC LIMIT ?';
@@ -608,33 +612,112 @@ function getDashboardHTML(): string {
 		.filter-group {
 			display: flex;
 			flex-direction: column;
+			position: relative;
 		}
-		.filter-group label {
+		.filter-group > label {
 			display: block;
-			margin-bottom: 5px;
+			margin-bottom: 8px;
 			color: #b0b0b0;
 			font-weight: 500;
 			font-size: 12px;
 			text-transform: uppercase;
 			letter-spacing: 0.5px;
 		}
-		.filter-group select {
+		.filter-dropdown {
+			position: relative;
+		}
+		.filter-dropdown-btn {
 			width: 100%;
-			padding: 8px 10px;
+			padding: 10px 12px;
 			border: 1px solid #2a2a2a;
 			border-radius: 6px;
 			font-size: 14px;
 			font-family: inherit;
 			background: #0f0f0f;
 			color: #e0e0e0;
+			cursor: pointer;
+			text-align: left;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
 		}
-		.filter-group select:focus {
-			outline: none;
+		.filter-dropdown-btn:hover {
 			border-color: #3a3a3a;
 		}
-		.filter-group select option {
+		.filter-dropdown-btn::after {
+			content: '▼';
+			font-size: 10px;
+			color: #888;
+			transition: transform 0.2s;
+		}
+		.filter-dropdown-btn.open::after {
+			transform: rotate(180deg);
+		}
+		.filter-dropdown-panel {
+			display: none;
+			position: absolute;
+			top: 100%;
+			left: 0;
+			right: 0;
+			margin-top: 4px;
+			background: #1a1a1a;
+			border: 1px solid #2a2a2a;
+			border-radius: 6px;
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+			z-index: 1000;
+			max-height: 250px;
+			overflow-y: auto;
+		}
+		.filter-dropdown-panel.open {
+			display: block;
+		}
+		.filter-dropdown-panel::-webkit-scrollbar {
+			width: 6px;
+		}
+		.filter-dropdown-panel::-webkit-scrollbar-track {
+			background: #1a1a1a;
+		}
+		.filter-dropdown-panel::-webkit-scrollbar-thumb {
+			background: #2a2a2a;
+			border-radius: 3px;
+		}
+		.filter-dropdown-panel::-webkit-scrollbar-thumb:hover {
+			background: #3a3a3a;
+		}
+		.checkbox-group {
+			display: flex;
+			flex-direction: column;
+			gap: 0;
+			padding: 4px;
+		}
+		.checkbox-item {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 8px;
+			border-radius: 4px;
+		}
+		.checkbox-item:hover {
 			background: #0f0f0f;
+		}
+		.checkbox-item input[type="checkbox"] {
+			width: 16px;
+			height: 16px;
+			cursor: pointer;
+			accent-color: #3a3a3a;
+		}
+		.checkbox-item label {
 			color: #e0e0e0;
+			font-size: 14px;
+			cursor: pointer;
+			font-weight: normal;
+			text-transform: none;
+			letter-spacing: normal;
+			margin: 0;
+			flex: 1;
+		}
+		.checkbox-item:hover label {
+			color: #ffffff;
 		}
 		.filter-actions {
 			display: flex;
@@ -710,40 +793,93 @@ function getDashboardHTML(): string {
 			<h2>Filters</h2>
 			<div class="filters-grid">
 				<div class="filter-group">
-					<label for="filterSentiment">Sentiment</label>
-					<select id="filterSentiment">
-						<option value="">All Sentiments</option>
-						<option value="positive">Positive</option>
-						<option value="neutral">Neutral</option>
-						<option value="negative">Negative</option>
-					</select>
+					<label>Sentiment</label>
+					<div class="filter-dropdown">
+						<button type="button" class="filter-dropdown-btn" data-filter="filterSentiment">All Sentiments</button>
+						<div class="filter-dropdown-panel" id="filterSentiment">
+							<div class="checkbox-group">
+								<div class="checkbox-item">
+									<input type="checkbox" id="sentiment-positive" value="positive">
+									<label for="sentiment-positive">Positive</label>
+								</div>
+								<div class="checkbox-item">
+									<input type="checkbox" id="sentiment-neutral" value="neutral">
+									<label for="sentiment-neutral">Neutral</label>
+								</div>
+								<div class="checkbox-item">
+									<input type="checkbox" id="sentiment-negative" value="negative">
+									<label for="sentiment-negative">Negative</label>
+								</div>
+							</div>
+						</div>
+					</div>
 				</div>
 				<div class="filter-group">
-					<label for="filterSource">Source</label>
-					<select id="filterSource">
-						<option value="">All Sources</option>
-						<option value="github">GitHub</option>
-						<option value="support">Support</option>
-						<option value="twitter">Twitter</option>
-						<option value="email">Email</option>
-					</select>
+					<label>Source</label>
+					<div class="filter-dropdown">
+						<button type="button" class="filter-dropdown-btn" data-filter="filterSource">All Sources</button>
+						<div class="filter-dropdown-panel" id="filterSource">
+							<div class="checkbox-group">
+								<div class="checkbox-item">
+									<input type="checkbox" id="source-github" value="github">
+									<label for="source-github">GitHub</label>
+								</div>
+								<div class="checkbox-item">
+									<input type="checkbox" id="source-support" value="support">
+									<label for="source-support">Support</label>
+								</div>
+								<div class="checkbox-item">
+									<input type="checkbox" id="source-twitter" value="twitter">
+									<label for="source-twitter">Twitter</label>
+								</div>
+								<div class="checkbox-item">
+									<input type="checkbox" id="source-email" value="email">
+									<label for="source-email">Email</label>
+								</div>
+							</div>
+						</div>
+					</div>
 				</div>
 				<div class="filter-group">
-					<label for="filterUrgency">Urgency</label>
-					<select id="filterUrgency">
-						<option value="">All Urgency Levels</option>
-						<option value="1">1 - Low</option>
-						<option value="2">2</option>
-						<option value="3">3 - Medium</option>
-						<option value="4">4</option>
-						<option value="5">5 - High</option>
-					</select>
+					<label>Urgency</label>
+					<div class="filter-dropdown">
+						<button type="button" class="filter-dropdown-btn" data-filter="filterUrgency">All Urgency Levels</button>
+						<div class="filter-dropdown-panel" id="filterUrgency">
+							<div class="checkbox-group">
+								<div class="checkbox-item">
+									<input type="checkbox" id="urgency-1" value="1">
+									<label for="urgency-1">1 - Low</label>
+								</div>
+								<div class="checkbox-item">
+									<input type="checkbox" id="urgency-2" value="2">
+									<label for="urgency-2">2</label>
+								</div>
+								<div class="checkbox-item">
+									<input type="checkbox" id="urgency-3" value="3">
+									<label for="urgency-3">3 - Medium</label>
+								</div>
+								<div class="checkbox-item">
+									<input type="checkbox" id="urgency-4" value="4">
+									<label for="urgency-4">4</label>
+								</div>
+								<div class="checkbox-item">
+									<input type="checkbox" id="urgency-5" value="5">
+									<label for="urgency-5">5 - High</label>
+								</div>
+							</div>
+						</div>
+					</div>
 				</div>
 				<div class="filter-group">
-					<label for="filterTag">Tag</label>
-					<select id="filterTag">
-						<option value="">All Tags</option>
-					</select>
+					<label>Tag</label>
+					<div class="filter-dropdown">
+						<button type="button" class="filter-dropdown-btn" data-filter="filterTag">All Tags</button>
+						<div class="filter-dropdown-panel" id="filterTag">
+							<div class="checkbox-group">
+								<!-- Tags will be populated dynamically -->
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 			<div class="filter-actions">
@@ -771,12 +907,79 @@ function getDashboardHTML(): string {
 			loadFeedback();
 		}, 10000);
 
-		// Filter event listeners
-		const filterSelects = ['filterSentiment', 'filterSource', 'filterUrgency', 'filterTag'];
-		filterSelects.forEach(id => {
-			document.getElementById(id).addEventListener('change', () => {
-				loadFeedback();
+		// Dropdown toggle functionality
+		document.querySelectorAll('.filter-dropdown-btn').forEach(btn => {
+			btn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				const filterId = btn.getAttribute('data-filter');
+				const panel = document.getElementById(filterId);
+				const isOpen = panel.classList.contains('open');
+				
+				// Close all dropdowns
+				document.querySelectorAll('.filter-dropdown-panel').forEach(p => p.classList.remove('open'));
+				document.querySelectorAll('.filter-dropdown-btn').forEach(b => b.classList.remove('open'));
+				
+				// Toggle this dropdown
+				if (!isOpen) {
+					panel.classList.add('open');
+					btn.classList.add('open');
+				}
 			});
+		});
+
+		// Close dropdowns when clicking outside
+		document.addEventListener('click', (e) => {
+			if (!e.target.closest('.filter-dropdown') && e.target.type !== 'checkbox') {
+				document.querySelectorAll('.filter-dropdown-panel').forEach(p => p.classList.remove('open'));
+				document.querySelectorAll('.filter-dropdown-btn').forEach(b => b.classList.remove('open'));
+			}
+		});
+
+		// Prevent dropdown from closing when clicking inside the panel
+		document.querySelectorAll('.filter-dropdown-panel').forEach(panel => {
+			panel.addEventListener('click', (e) => {
+				e.stopPropagation();
+			});
+		});
+
+		// Update button text when checkboxes change
+		function updateButtonText(filterId, defaultText) {
+			const btn = document.querySelector('.filter-dropdown-btn[data-filter="' + filterId + '"]');
+			const checked = document.querySelectorAll('#' + filterId + ' input[type="checkbox"]:checked');
+			if (checked.length === 0) {
+				btn.textContent = defaultText;
+			} else if (checked.length === 1) {
+				const label = document.querySelector('#' + filterId + ' label[for="' + checked[0].id + '"]');
+				btn.textContent = label ? label.textContent.split(' (')[0] : checked[0].value;
+			} else if (checked.length <= 3) {
+				const labels = Array.from(checked).map(cb => {
+					const label = document.querySelector('#' + filterId + ' label[for="' + cb.id + '"]');
+					return label ? label.textContent.split(' (')[0] : cb.value;
+				});
+				btn.textContent = labels.join(', ');
+			} else {
+				btn.textContent = checked.length + ' selected';
+			}
+		}
+
+		// Filter event listeners - listen to all checkboxes
+		const filterGroups = [
+			{ id: 'filterSentiment', defaultText: 'All Sentiments' },
+			{ id: 'filterSource', defaultText: 'All Sources' },
+			{ id: 'filterUrgency', defaultText: 'All Urgency Levels' },
+			{ id: 'filterTag', defaultText: 'All Tags' }
+		];
+		
+		filterGroups.forEach(filter => {
+			const group = document.getElementById(filter.id);
+			if (group) {
+				group.addEventListener('change', (e) => {
+					if (e.target && e.target.type === 'checkbox') {
+						updateButtonText(filter.id, filter.defaultText);
+						loadFeedback();
+					}
+				});
+			}
 		});
 
 		document.getElementById('applyFilters').addEventListener('click', () => {
@@ -784,10 +987,16 @@ function getDashboardHTML(): string {
 		});
 
 		document.getElementById('clearFilters').addEventListener('click', () => {
-			document.getElementById('filterSentiment').value = '';
-			document.getElementById('filterSource').value = '';
-			document.getElementById('filterUrgency').value = '';
-			document.getElementById('filterTag').value = '';
+			// Uncheck all checkboxes
+			document.querySelectorAll('#filterSentiment input[type="checkbox"]').forEach(cb => cb.checked = false);
+			document.querySelectorAll('#filterSource input[type="checkbox"]').forEach(cb => cb.checked = false);
+			document.querySelectorAll('#filterUrgency input[type="checkbox"]').forEach(cb => cb.checked = false);
+			document.querySelectorAll('#filterTag input[type="checkbox"]').forEach(cb => cb.checked = false);
+			// Update button texts
+			updateButtonText('filterSentiment', 'All Sentiments');
+			updateButtonText('filterSource', 'All Sources');
+			updateButtonText('filterUrgency', 'All Urgency Levels');
+			updateButtonText('filterTag', 'All Tags');
 			loadFeedback();
 		});
 
@@ -889,18 +1098,28 @@ function getDashboardHTML(): string {
 			try {
 				const response = await fetch('/api/stats');
 				const stats = await response.json();
-				const tagSelect = document.getElementById('filterTag');
+				const tagPanel = document.getElementById('filterTag');
+				const tagGroup = tagPanel.querySelector('.checkbox-group');
 				
-				// Clear existing options except "All Tags"
-				tagSelect.innerHTML = '<option value="">All Tags</option>';
+				// Clear existing checkboxes
+				tagGroup.innerHTML = '';
 				
-				// Add top tags
+				// Add top tags as checkboxes
 				if (stats.top_tags && stats.top_tags.length > 0) {
 					for (const tagItem of stats.top_tags) {
-						const option = document.createElement('option');
-						option.value = tagItem.tag;
-						option.textContent = tagItem.tag + ' (' + tagItem.count + ')';
-						tagSelect.appendChild(option);
+						const checkboxId = 'tag-' + tagItem.tag.replace(/\s+/g, '-').toLowerCase();
+						const checkboxItem = document.createElement('div');
+						checkboxItem.className = 'checkbox-item';
+						const input = document.createElement('input');
+						input.type = 'checkbox';
+						input.id = checkboxId;
+						input.value = tagItem.tag;
+						const label = document.createElement('label');
+						label.htmlFor = checkboxId;
+						label.textContent = tagItem.tag + ' (' + tagItem.count + ')';
+						checkboxItem.appendChild(input);
+						checkboxItem.appendChild(label);
+						tagGroup.appendChild(checkboxItem);
 					}
 				}
 			} catch (error) {
@@ -910,18 +1129,23 @@ function getDashboardHTML(): string {
 
 		async function loadFeedback() {
 			try {
-				// Get filter values
-				const sentiment = document.getElementById('filterSentiment').value;
-				const source = document.getElementById('filterSource').value;
-				const urgency = document.getElementById('filterUrgency').value;
-				const tag = document.getElementById('filterTag').value;
+				// Get checked filter values
+				const getCheckedValues = (groupId) => {
+					const checkboxes = document.querySelectorAll('#' + groupId + ' input[type="checkbox"]:checked');
+					return Array.from(checkboxes).map(cb => cb.value);
+				};
+				
+				const sentiments = getCheckedValues('filterSentiment');
+				const sources = getCheckedValues('filterSource');
+				const urgencies = getCheckedValues('filterUrgency');
+				const tags = getCheckedValues('filterTag');
 				
 				// Build query string
 				const params = new URLSearchParams({ limit: '50' });
-				if (sentiment) params.append('sentiment', sentiment);
-				if (source) params.append('source', source);
-				if (urgency) params.append('urgency', urgency);
-				if (tag) params.append('tag', tag);
+				sentiments.forEach(s => params.append('sentiment', s));
+				sources.forEach(s => params.append('source', s));
+				urgencies.forEach(u => params.append('urgency', u));
+				tags.forEach(t => params.append('tag', t));
 				
 				const response = await fetch('/api/feedback?' + params.toString());
 				const feedback = await response.json();
