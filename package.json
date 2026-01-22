@@ -1,0 +1,9 @@
+{
+	"name": "feedback-radar",
+	"version": "1.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "cd app && npx wrangler deploy",
+		"dev": "cd app && npx wrangler dev"
+	}
+}

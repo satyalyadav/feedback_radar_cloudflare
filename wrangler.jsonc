@@ -1,0 +1,29 @@
+/**
+ * Root-level Wrangler config for deployment
+ * Points to the app subdirectory
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "app",
+	"main": "app/src/index.ts",
+	"compatibility_date": "2025-09-27",
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "feedback-radar-db",
+			"database_id": "510c508c-4488-49ba-a97d-c37114f2624b"
+		}
+	],
+	"ai": {
+		"binding": "AI"
+	},
+	"analytics_engine_datasets": [
+		{
+			"binding": "ANALYTICS",
+			"dataset": "feedback_radar"
+		}
+	]
+}
